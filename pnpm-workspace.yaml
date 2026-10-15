@@ -1,0 +1,9 @@
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
+allowBuilds:
+  esbuild: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - '@maronn-openid-connect/cli@0.12.0'
+  - '@maronn-openid-connect/core@0.7.0'

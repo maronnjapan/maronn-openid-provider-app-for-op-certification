@@ -1,38 +1,28 @@
+// ローカル開発（wrangler dev）用の設定。リソース ID はプレースホルダのままにしておく。
+// 実際の ID と ISSUER は scripts/deploy.ts が解決し、
+// デプロイ専用の wrangler.deploy.jsonc（gitignore 済み）へ書き出す。
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "maronn-openid-provider-app-for-op-certification",
   "main": "src/index.ts",
-  "compatibility_date": "2026-10-15"
-  // "compatibility_flags": [
-  //   "nodejs_compat"
-  // ],
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "MY_KV_NAMESPACE",
-  //     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  //   }
-  // ],
-  // "r2_buckets": [
-  //   {
-  //     "binding": "MY_BUCKET",
-  //     "bucket_name": "my-bucket"
-  //   }
-  // ],
-  // "d1_databases": [
-  //   {
-  //     "binding": "MY_DB",
-  //     "database_name": "my-database",
-  //     "database_id": ""
-  //   }
-  // ],
-  // "ai": {
-  //   "binding": "AI"
-  // },
-  // "observability": {
-  //   "enabled": true,
-  //   "head_sampling_rate": 1
-  // }
+  "compatibility_date": "2026-10-15",
+  "workers_dev": true,
+  // issuer と異なるホスト名で OP が公開されないよう、プレビュー URL は無効にする。
+  "preview_urls": false,
+  "vars": {
+    "ISSUER": "http://localhost:8787"
+  },
+  // SIGNING_KEY（署名鍵の秘密 JWK）は Worker シークレット。
+  // デプロイ時は scripts/deploy.ts が登録し、ローカルでは .dev.vars に書き出す。
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "maronn-openid-provider-for-op-certification",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
 }

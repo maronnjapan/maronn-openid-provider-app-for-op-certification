@@ -1,0 +1,23 @@
+{
+  "cliVersion": "0.12.0",
+  "framework": "hono",
+  "features": {
+    "pkce": false,
+    "refreshToken": true,
+    "introspection": true,
+    "revocation": true,
+    "requestObject": true,
+    "par": false,
+    "tokenExchange": false,
+    "jarm": false,
+    "deviceAuthorizationGrant": false,
+    "idJag": false,
+    "ciba": false,
+    "jwtIntrospectionResponse": false,
+    "rpInitiatedLogout": false,
+    "dynamicClientRegistration": false,
+    "googleLogin": false
+  },
+  "scopes": [],
+  "db": "sql"
+}

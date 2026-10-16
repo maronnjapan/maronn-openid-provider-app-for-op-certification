@@ -24,6 +24,8 @@ pnpm exec maronn-oidc generate hono --db sql --disable pkce -o src/oidc-provider
 - **PKCE は任意**（`allowNonPkceAuthorizationCodeFlow: true`）。confidential クライアントは `code_challenge` を付けずに認可コードフローを完了できる。`code_challenge` を付けた場合は、その値を検証したうえで、トークンエンドポイントで一致する `code_verifier` を必須にする。public クライアントが PKCE を省略した場合と、PKCE パラメータの形式が不正な場合は拒否する。
 - **署名なし（`alg: none`）の Request Object を受け付ける**（`allowUnsignedRequestObject: true`）。Discovery の `request_object_signing_alg_values_supported` に `none` が入るので、Basic OP プランの Request Object 系テストが skip されずに実行される。
 
+`/authorize` は `acr_values`（と `claims` の `id_token.acr.values`）を受け付ける。`acrResolver` は渡していないので、要求された値のうち先頭の値を、ID トークン・アクセストークン・イントロスペクションの `acr` に載せる（生成コードの既定の動作）。要求が無ければ `acr` は載せない。
+
 ## デプロイ
 
 ```txt

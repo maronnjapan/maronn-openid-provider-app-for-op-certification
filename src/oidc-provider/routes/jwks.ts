@@ -1,26 +1,44 @@
 import { Hono } from 'hono';
-import { exportJwks, extractAlgorithmParamsFromJwk, type SigningKey } from '@maronn-openid-connect/core';
+import {
+  type SigningKey,
+  exportJwks,
+  extractAlgorithmParamsFromJwk,
+  type JwkSet,
+} from '@maronn-openid-connect/core';
+
+/**
+ * JWKS endpoint (API layer).
+ * Serves the public keys used to verify token signatures.
+ *
+ * Every function exported below is one box of the JWKS endpoint's pipeline
+ * (`maronn-oidc graph --detail steps --endpoint jwks`).
+ */
 
 export const jwksApp = new Hono<{ Variables: Record<string, any> }>();
 
 /**
- * JWKS Endpoint
- * Serves the public keys used to verify token signatures.
+ * Collect every registered signing key of the per-purpose key sets
+ * (signingKeys / idTokenSigningKeys / userinfoSigningKeys).
  *
- * T-022: every key of the per-purpose key sets (signingKeys / idTokenSigningKeys /
- * userinfoSigningKeys) is published so rotated-out keys remain verifiable until
- * tokens signed with them expire. kid 指定がある鍵は kid で重複排除し、kid 未指定の
- * 鍵は最新の 1 件のみ採用する（鍵セットは新しい鍵ほど先頭にある）。
+ * T-022: every key is published so rotated-out keys remain verifiable until
+ * tokens signed with them expire.
  */
-jwksApp.get('/', async (c) => {
-  const keys: SigningKey[] = [
+export function collectPublishedKeys(c: any): SigningKey[] {
+  return [
     ...((c.get('signingKeys') as SigningKey[] | undefined) ?? []),
     ...((c.get('idTokenSigningKeys') as SigningKey[] | undefined) ?? []),
     ...((c.get('userinfoSigningKeys') as SigningKey[] | undefined) ?? []),
   ];
+}
 
+/**
+ * Export the public halves as a JWK Set (RFC 7517 §5). kid 指定がある鍵は kid で
+ * 重複排除し、kid 未指定の鍵は最新の 1 件のみ採用する（鍵セットは新しい鍵ほど
+ * 先頭にある）。An empty key set is a server configuration error.
+ */
+export async function buildJwksDocument(keys: SigningKey[]): Promise<JwkSet> {
   if (keys.length === 0) {
-    return c.json({ error: 'server_error' }, 500);
+    throw new Error('No signing key is registered');
   }
 
   // 同じ kid の鍵は最初に出現したものだけを採用する（ID Token / UserInfo 用の
@@ -43,8 +61,31 @@ jwksApp.get('/', async (c) => {
     entries.push({ publicKey, keyId: key.keyId });
   }
 
-  const jwks = await exportJwks(entries);
+  return exportJwks(entries);
+}
 
+/** Respond with the cacheable JWK Set (3600s, symmetric with discovery). */
+export function respondJwks(c: any, jwks: JwkSet): Response {
   c.header('Cache-Control', 'public, max-age=3600');
   return c.json(jwks);
+}
+
+/**
+ * JWKS Endpoint
+ */
+jwksApp.get('/', async (c) => {
+  try {
+    // [collect-public-keys] Collect every registered signing key
+    const keys = collectPublishedKeys(c);
+
+    // [export-jwks] Export the public halves as a JWK Set — RFC 7517 §5
+    const jwks = await buildJwksDocument(keys);
+
+    // [respond] Respond with the cacheable JWK Set
+    return respondJwks(c, jwks);
+  } catch {
+    // An empty key set (or a key that cannot be exported) is a configuration
+    // problem of the OP, never the caller's.
+    return c.json({ error: 'server_error' }, 500);
+  }
 });

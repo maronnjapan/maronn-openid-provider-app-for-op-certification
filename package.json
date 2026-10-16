@@ -10,11 +10,11 @@
     "typecheck": "pnpm run cf-typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@maronn-openid-connect/core": "^0.7.0",
+    "@maronn-openid-connect/core": "^0.8.0",
     "hono": "^4.13.13"
   },
   "devDependencies": {
-    "@maronn-openid-connect/cli": "^0.12.0",
+    "@maronn-openid-connect/cli": "^0.13.0",
     "@types/node": "^26.6.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

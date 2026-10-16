@@ -219,12 +219,12 @@ export function createSqlProviderStores(db: SqlDatabase): ProviderStores {
 
   const accessTokenStore: AccessTokenStorage = {
     async set(token, info) {
-      const { sub, scope, clientId, expiresAt, iat, issuer, jti, grantId, ...payload } = info;
+      const { sub, scope, clientId, expiresAt, iat, issuer, jti, grantId, acr, ...payload } = info;
       const tokenHash = await hashKey(token);
       await db.run({
         sql:
-          'INSERT INTO access_tokens (id, sub, exp, iat, iss, client_id, scope, transaction_id, ' +
-          'token_hash, grant_id, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ' +
+          'INSERT INTO access_tokens (id, sub, exp, iat, iss, client_id, scope, acr, transaction_id, ' +
+          'token_hash, grant_id, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ' +
           // The transaction of the code the grant came from. A grant without a
           // code (the device flow, CIBA) has none.
           '(SELECT transaction_id FROM codes WHERE grant_id = ? LIMIT 1), ?, ?, ?)',
@@ -237,6 +237,7 @@ export function createSqlProviderStores(db: SqlDatabase): ProviderStores {
           issuer ?? null,
           clientId,
           joinScope(scope),
+          acr ?? null,
           grantId ?? null,
           tokenHash,
           grantId ?? null,
@@ -256,7 +257,7 @@ export function createSqlProviderStores(db: SqlDatabase): ProviderStores {
       const tokenHash = await hashKey(token);
       const [row] = await db.all<AccessTokenRow>({
         sql:
-          'SELECT id, sub, exp, iat, iss, client_id, scope, grant_id, payload FROM access_tokens ' +
+          'SELECT id, sub, exp, iat, iss, client_id, scope, acr, grant_id, payload FROM access_tokens ' +
           'WHERE token_hash = ? AND exp > ?',
         params: [tokenHash, nowSeconds()],
       });
@@ -271,6 +272,7 @@ export function createSqlProviderStores(db: SqlDatabase): ProviderStores {
       if (row.id !== tokenHash) info.jti = row.id;
       if (row.iat !== null) info.iat = Number(row.iat);
       if (row.iss !== null) info.issuer = row.iss;
+      if (row.acr !== null) info.acr = row.acr;
       if (row.grant_id !== null) info.grantId = row.grant_id;
       return info;
     },
@@ -506,7 +508,16 @@ type OtherRequestParameters = Omit<
 >;
 
 /** The values of an AccessTokenInfo with a column of their own in access_tokens. */
-type AccessTokenColumn = 'sub' | 'scope' | 'clientId' | 'expiresAt' | 'iat' | 'issuer' | 'jti' | 'grantId';
+type AccessTokenColumn =
+  | 'sub'
+  | 'scope'
+  | 'clientId'
+  | 'expiresAt'
+  | 'iat'
+  | 'issuer'
+  | 'jti'
+  | 'grantId'
+  | 'acr';
 
 // Rows as the drivers return them: a BIGINT may come back as a string (pg) and
 // a BOOLEAN as 1 / 0 (SQLite), so they are read with Number() and toBoolean().
@@ -541,6 +552,7 @@ interface AccessTokenRow {
   iss: string | null;
   client_id: string;
   scope: string | null;
+  acr: string | null;
   grant_id: string | null;
   payload: string;
 }

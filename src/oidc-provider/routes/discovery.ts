@@ -1,17 +1,30 @@
 import { Hono } from 'hono';
-import { buildProviderMetadata, getJwaAlgorithm, type SigningKey } from '@maronn-openid-connect/core';
+import {
+  getJwaAlgorithm,
+  type SigningKey,
+  buildProviderMetadata,
+} from '@maronn-openid-connect/core';
 import { defaultProviderConfig } from '../config.js';
+
+/**
+ * OpenID Connect Discovery endpoint (API layer).
+ * OIDC Discovery 1.0 Section 4
+ *
+ * Every function exported below is one box of the discovery endpoint's
+ * pipeline (`maronn-oidc graph --detail steps --endpoint discovery`).
+ */
 
 export const discoveryApp = new Hono<{ Variables: Record<string, any> }>();
 
 /**
- * OpenID Connect Discovery Endpoint
- * OIDC Discovery 1.0 Section 4
+ * Collect what the registered key sets let the OP advertise: the ID Token
+ * signing keys (id_token_signing_alg_values_supported is derived from them,
+ * OIDC Core 1.0 §15.1) and the UserInfo signing algorithms (§5.3.2).
  */
-discoveryApp.get('/', (c) => {
-  const config = c.get('config') ?? defaultProviderConfig;
-  const issuer = config.issuer;
-
+export function collectAdvertisedSigningKeys(c: any): {
+  idTokenSigningKeys: CryptoKey[];
+  userinfoSigningAlgValues: string[];
+} {
   // Derive id_token_signing_alg_values_supported from the actual key set
   // (OIDC Core 1.0 §15.1 — RS256 presence is enforced by buildProviderMetadata).
   // T-022: 全 registered ID Token 鍵の alg を集約することで RS256+ES256 など
@@ -26,6 +39,24 @@ discoveryApp.get('/', (c) => {
   const userinfoSigningAlgValues = [
     ...new Set(userinfoSigningKeyArr.map((k) => getJwaAlgorithm(k.privateKey))),
   ];
+  return { idTokenSigningKeys, userinfoSigningAlgValues };
+}
+
+/**
+ * Build the provider metadata document.
+ * OIDC Discovery 1.0 §3 / RFC 8414
+ *
+ * Every endpoint URL is built on config.issuer. The entries a feature adds
+ * (introspection, revocation, the experimental endpoints) are here only
+ * because that feature was generated.
+ */
+export function buildDiscoveryMetadata(
+  c: any,
+  input: { idTokenSigningKeys: CryptoKey[]; userinfoSigningAlgValues: string[] },
+): Record<string, unknown> {
+  const { idTokenSigningKeys, userinfoSigningAlgValues } = input;
+  const config = c.get('config') ?? defaultProviderConfig;
+  const issuer = config.issuer;
 
   const metadata = buildProviderMetadata({
     issuer,
@@ -130,14 +161,37 @@ discoveryApp.get('/', (c) => {
     ],
   });
 
-  // RFC 8414 §3.2 / RFC 9111 §5.2: Discovery metadata is cacheable. Advertise a
-  // 3600s freshness lifetime, symmetric with the JWKS endpoint (jwks.ts), so
-  // client libraries reuse the metadata deterministically.
-  c.header('Cache-Control', 'public, max-age=3600');
   // code_challenge_methods_supported is defined in OAuth 2.1 / PKCE spec,
   // not in OIDC Discovery, so it is added separately.
-  return c.json({
+  return {
     ...metadata,
     code_challenge_methods_supported: ['S256'],
-  });
+  };
+}
+
+/**
+ * RFC 8414 §3.2 / RFC 9111 §5.2: Discovery metadata is cacheable. Advertise a
+ * 3600s freshness lifetime, symmetric with the JWKS endpoint (jwks.ts), so
+ * client libraries reuse the metadata deterministically.
+ */
+export function respondDiscovery(c: any, metadata: Record<string, unknown>): Response {
+  c.header('Cache-Control', 'public, max-age=3600');
+  return c.json(metadata);
+}
+
+/**
+ * OpenID Connect Discovery Endpoint
+ * OIDC Discovery 1.0 Section 4
+ */
+discoveryApp.get('/', (c) => {
+  {
+    // [collect-signing-algorithms] Collect the advertised signing algorithms — OIDC Core 1.0 §15.1 / §5.3.2
+    const { idTokenSigningKeys, userinfoSigningAlgValues } = collectAdvertisedSigningKeys(c);
+
+    // [build-metadata] Build the provider metadata — OIDC Discovery 1.0 §3 / RFC 8414
+    const metadata = buildDiscoveryMetadata(c, { idTokenSigningKeys, userinfoSigningAlgValues });
+
+    // [respond] Respond with the cacheable JSON document — RFC 8414 §3.2
+    return respondDiscovery(c, metadata);
+  }
 });

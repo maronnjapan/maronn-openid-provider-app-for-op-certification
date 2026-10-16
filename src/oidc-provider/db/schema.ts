@@ -173,6 +173,11 @@ CREATE TABLE IF NOT EXISTS access_tokens (
   iss                   VARCHAR(5000),
   client_id             VARCHAR(5000) NOT NULL,
   scope                 TEXT,
+  -- The acr claim of the token (RFC 9068, OpenID Connect Core 1.0): the
+  -- authentication context class the token was issued for, the same as the acr
+  -- of its ID Token. NULL when the token has none, as when the authorization
+  -- request asked for no acr (acr_values).
+  acr                   VARCHAR(5000),
   -- Always NULL: the OP does not issue authorization_details (RFC 9396) yet.
   authorization_details TEXT,
   transaction_id        VARCHAR(5000) REFERENCES transactions (transaction_id) ON DELETE SET NULL,
